@@ -325,6 +325,19 @@ private:
   SygusSymBreakNew * d_sygus_sym_break;
 public:
   Node getNextDecisionRequest( unsigned& priority );
+
+public:
+/** statistics class */
+  class Statistics {
+  public:
+    IntStat d_sel;
+    IntStat d_sharedsel;
+    IntStat d_sel_sygus;
+    IntStat d_sharedsel_sygus;
+    Statistics();
+    ~Statistics();
+  };/* class TheoryStrings::Statistics */
+  Statistics d_statistics;
 };/* class TheoryDatatypes */
 
 }/* CVC4::theory::datatypes namespace */

@@ -32,6 +32,7 @@
 #include "theory/valuation.h"
 #include "options/theory_options.h"
 #include "options/quantifiers_options.h"
+#include "smt/smt_statistics_registry.h"
 
 using namespace std;
 using namespace CVC4::kind;
@@ -110,10 +111,10 @@ TheoryDatatypes::EqcInfo* TheoryDatatypes::getOrMakeEqcInfo( TNode n, bool doMak
       if( n.getKind()==APPLY_CONSTRUCTOR ){
         ei->d_constructor = n;
       }
-      
+
       //add to selectors
       d_selector_apps[n] = 0;
-      
+
       return ei;
     }else{
       return NULL;
@@ -143,7 +144,7 @@ void TheoryDatatypes::check(Effort e) {
   }
   Assert( d_pending.empty() && d_pending_merge.empty() );
   d_addedLemma = false;
-  
+
   if( e == EFFORT_LAST_CALL ){
     Assert( d_sygus_sym_break );
     std::vector< Node > lemmas;
@@ -187,7 +188,7 @@ void TheoryDatatypes::check(Effort e) {
         return;
       }
     }while( d_addedFact );
-  
+
     //check for splits
     Trace("datatypes-debug") << "Check for splits " << e << endl;
     do {
@@ -469,7 +470,7 @@ bool TheoryDatatypes::doSendLemmas( std::vector< Node >& lemmas ){
   lemmas.clear();
   return ret;
 }
-        
+
 void TheoryDatatypes::assertFact( Node fact, Node exp ){
   Assert( d_pending_merge.empty() );
   Trace("datatypes-debug") << "TheoryDatatypes::assertFact : " << fact << std::endl;
@@ -554,6 +555,96 @@ void TheoryDatatypes::finishInit() {
 }
 
 Node TheoryDatatypes::expandDefinition(LogicRequest &logicRequest, Node n) {
+  //Vector(list) of datatypes seen so far
+  static vector<TypeNode> dtList;
+  //Vector(list) of selectors seen so far
+  static vector<Node> selList;
+
+  if(n.getType().isDatatype())
+  {
+    //cout<<"n = "<<n<<"\n";
+    bool dtflag = false;
+    bool selflag = false;
+    Datatype d = ((DatatypeType)n.getType().toType()).getDatatype();
+
+    for(unsigned int i = 0; i < dtList.size(); i++)
+    {
+      if(dtList[i] == n.getType())
+                dtflag = true;
+    }
+    if(dtflag == false)
+    {
+      dtList.push_back(n.getType());
+      for(unsigned int i = 0; i < d.getNumConstructors(); i++)
+        {
+          //cout<<"Constructor: "<<d[i];
+          for(unsigned int j = 0; j < d[i].getNumArgs(); j++)
+          {
+            Node sel = d[i].getSelectorInternal(n.getType().toType(), j);
+            selflag = false;
+            for(unsigned int k = 0; k < selList.size(); k++)
+            {
+              if(selList[k] == sel)
+                        selflag = true;
+            }
+            if(selflag == false)
+            {
+              selList.push_back(sel);
+              ++(d_statistics.d_sharedsel);
+            }
+            //cout<<"\t Selector = "<<sel<<"\t";
+            ++(d_statistics.d_sel);
+          }
+          //cout<<"\n";
+       }
+       //cout<<"Number of selectors: "<<selCount<<"\n";
+       //cout<<"Number of distinct (shared) selectors: "<<selList.size()<<"\n";
+    }
+  }
+
+  if(n.getKind() == APPLY_TESTER)
+  {
+    //cout<<"n = "<<n<<"\n";
+    bool dtflag = false;
+    bool selflag = false;
+    Datatype d = ((DatatypeType)n[0].getType().toType()).getDatatype();
+
+    for(unsigned int i = 0; i < dtList.size(); i++)
+    {
+      if(dtList[i] == n[0].getType())
+                dtflag = true;
+    }
+    if(dtflag == false)
+    {
+      dtList.push_back(n[0].getType());
+      for(unsigned int i = 0; i < d.getNumConstructors(); i++)
+        {
+          //cout<<"Constructor: "<<d[i];
+          for(unsigned int j = 0; j < d[i].getNumArgs(); j++)
+          {
+            Node sel = d[i].getSelectorInternal(n[0].getType().toType(), j);
+            selflag = false;
+            for(unsigned int k = 0; k < selList.size(); k++)
+            {
+              if(selList[k] == sel)
+              {
+                selflag = true;
+              }
+            }
+            if(selflag == false)
+            {
+              selList.push_back(sel);
+              ++(d_statistics.d_sharedsel);
+            }
+            //cout<<"\t Selector = "<<sel<<"\t";
+            ++(d_statistics.d_sel);
+          }
+          //cout<<"\n";
+       }
+       //cout<<"Number of selectors: "<<selCount<<"\n";
+       //cout<<"Number of distinct (shared) selectors: "<<selList.size()<<"\n";
+    }
+  }
   switch( n.getKind() ){
   case kind::APPLY_SELECTOR: {
     Trace("dt-expand") << "Dt Expand definition : " << n << std::endl;
@@ -605,11 +696,77 @@ Node TheoryDatatypes::expandDefinition(LogicRequest &logicRequest, Node n) {
   Unreachable();
 }
 
+// Stats
+TheoryDatatypes::Statistics::Statistics():
+  d_sel("TheoryDatatypes::NumOfSelectors", 0),
+  d_sharedsel("TheoryDatatypes::NumOfSharedSelectors", 0),
+  d_sel_sygus("TheoryDatatypes::NumOfSygusSelectors", 0),
+  d_sharedsel_sygus("TheoryDatatypes::NumOfSygusSharedSelectors",0)
+{
+  smtStatisticsRegistry()->registerStat(&d_sel);
+  smtStatisticsRegistry()->registerStat(&d_sharedsel);
+  smtStatisticsRegistry()->registerStat(&d_sel_sygus);
+  smtStatisticsRegistry()->registerStat(&d_sharedsel_sygus);
+}
+
+TheoryDatatypes::Statistics::~Statistics(){
+  smtStatisticsRegistry()->unregisterStat(&d_sel);
+  smtStatisticsRegistry()->unregisterStat(&d_sharedsel);
+  smtStatisticsRegistry()->unregisterStat(&d_sel_sygus);
+  smtStatisticsRegistry()->unregisterStat(&d_sharedsel_sygus);
+}
+
 void TheoryDatatypes::presolve() {
   Debug("datatypes") << "TheoryDatatypes::presolve()" << endl;
 }
 
 Node TheoryDatatypes::ppRewrite(TNode in) {
+  //Vector(list) of datatypes seen so far
+  static vector<TypeNode> dtList;
+  //Vector(list) of selectors seen so far
+  static vector<Node> selList;
+
+  if(in.getType().isDatatype())
+  {
+    //cout<<"n = "<<n<<"\n";
+    bool dtflag = false;
+    bool selflag = false;
+    Datatype d = ((DatatypeType)in.getType().toType()).getDatatype();
+
+    for(unsigned int i = 0; i < dtList.size(); i++)
+    {
+      if(dtList[i] == in.getType())
+                dtflag = true;
+    }
+    if(dtflag == false)
+    {
+      dtList.push_back(in.getType());
+      for(unsigned int i = 0; i < d.getNumConstructors(); i++)
+        {
+          //cout<<"Constructor: "<<d[i];
+          for(unsigned int j = 0; j < d[i].getNumArgs(); j++)
+          {
+            Node sel = d[i].getSelectorInternal(in.getType().toType(), j);
+            selflag = false;
+            for(unsigned int k = 0; k < selList.size(); k++)
+            {
+              if(selList[k] == sel)
+                        selflag = true;
+            }
+            if(selflag == false)
+            {
+              selList.push_back(sel);
+              ++(d_statistics.d_sharedsel_sygus);
+            }
+            //cout<<"\t Selector = "<<sel<<"\t";
+            ++(d_statistics.d_sel_sygus);
+          }
+          //cout<<"\n";
+       }
+       //cout<<"Number of selectors: "<<selCount<<"\n";
+       //cout<<"Number of distinct (shared) selectors: "<<selList.size()<<"\n";
+    }
+  }
   Debug("tuprec") << "TheoryDatatypes::ppRewrite(" << in << ")" << endl;
 
   TypeNode t = in.getType();
@@ -1125,7 +1282,7 @@ void TheoryDatatypes::addTester( int ttindex, Node t, EqcInfo* eqc, Node n, Node
         d_labels_data[n].push_back( t );
       }
       n_lbl++;
-      
+
       const Datatype& dt = ((DatatypeType)(t_arg.getType()).toType()).getDatatype();
       Debug("datatypes-labels") << "Labels at " << n_lbl << " / " << dt.getNumConstructors() << std::endl;
       if( tpolarity ){
@@ -1159,7 +1316,7 @@ void TheoryDatatypes::addTester( int ttindex, Node t, EqcInfo* eqc, Node n, Node
           std::vector< Node > eq_terms;
           NodeBuilder<> nb(kind::AND);
           //for( NodeList::const_iterator i = lbl->begin(); i != lbl->end(); i++ ) {
-          
+
           for( int i=0; i<n_lbl; i++ ){
             Node ti = d_labels_data[n][i];
             nb << ti;
@@ -1221,7 +1378,7 @@ void TheoryDatatypes::addSelector( Node s, EqcInfo* eqc, Node n, bool assertFact
     }else{
       d_selector_apps_data[n].push_back( s );
     }
-  
+
     eqc->d_selectors = true;
   }
   if( assertFacts && !eqc->d_constructor.get().isNull() ){
@@ -1289,7 +1446,7 @@ Node TheoryDatatypes::removeUninterpretedConstants( Node n, std::map< Node, Node
       }
       bool childChanged = false;
       for( unsigned i=0; i<n.getNumChildren(); i++ ){
-        Node nc = removeUninterpretedConstants( n[i], visited ); 
+        Node nc = removeUninterpretedConstants( n[i], visited );
         childChanged = childChanged || nc!=n[i];
         children.push_back( nc );
       }
@@ -1302,7 +1459,7 @@ Node TheoryDatatypes::removeUninterpretedConstants( Node n, std::map< Node, Node
   }else{
     return it->second;
   }
-} 
+}
 
 void TheoryDatatypes::collapseSelector( Node s, Node c ) {
   Assert( c.getKind()==APPLY_CONSTRUCTOR );
@@ -1325,7 +1482,7 @@ void TheoryDatatypes::collapseSelector( Node s, Node c ) {
     const DatatypeConstructor& dtc = dt[constructorIndex];
     int selectorIndex = dtc.getSelectorIndexInternal( selectorExpr );
     wrong = selectorIndex<0;
-    
+
     //if( wrong ){
     //  return;
     //}
@@ -1492,9 +1649,9 @@ void TheoryDatatypes::collectModelInfo( TheoryModel* m ){
   Trace("dt-model") << std::endl;
   printModelDebug( "dt-model" );
   Trace("dt-model") << std::endl;
-  
+
   set<Node> termSet;
-  
+
   // Compute terms appearing in assertions and shared terms, and in inferred equalities
   getRelevantTerms(termSet);
 
@@ -2064,7 +2221,7 @@ bool TheoryDatatypes::mustCommunicateFact( Node n, Node exp ){
   Trace("dt-lemma-debug") << "Compute for " << exp << " => " << n << std::endl;
   bool addLemma = false;
   if( options::dtInferAsLemmas() && exp!=d_true ){
-    addLemma = true;    
+    addLemma = true;
   }else if( n.getKind()==EQUAL ){
     TypeNode tn = n[0].getType();
     if( !tn.isDatatype() ){
@@ -2240,7 +2397,7 @@ bool TheoryDatatypes::checkClashModEq( TNode n1, TNode n2, std::vector< Node >& 
 void TheoryDatatypes::getRelevantTerms( std::set<Node>& termSet ) {
   // Compute terms appearing in assertions and shared terms
   computeRelevantTerms(termSet);
-  
+
   //also include non-singleton equivalence classes  TODO : revisit this
   eq::EqClassesIterator eqcs_i = eq::EqClassesIterator( &d_equalityEngine );
   while( !eqcs_i.isFinished() ){
