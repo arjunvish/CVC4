@@ -7,12 +7,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; depends on : smt.plf
 
-; sorts :
+; function constructor
+(declare arrow (! s1 sort (! s2 sort sort)))	
 
-(declare arrow (! s1 sort (! s2 sort sort)))	; function constructor
-
-; functions :
-
+; function application
 (declare apply (! s1 sort
                (! s2 sort
                (! t1 (term (arrow s1 s2))
@@ -20,22 +18,23 @@
                 (term s2))))))
 
 
+; temporary for trusting CNF conversions:
+(declare trust (th_holds false))
+(declare trust_f (! f formula (th_holds f)))
+
 ; inference rules :
-
-(declare trust (th_holds false))	; temporary
-(declare trust_f (! f formula (th_holds f)))  ; temporary
-
+; reflexivity
 (declare refl
   (! s sort
   (! t (term s)
     (th_holds (= s t t)))))
-
+; symmetry
 (declare symm (! s sort
               (! x (term s)
               (! y (term s)
               (! u (th_holds (= _ x y))
                 (th_holds (= _ y x)))))))
-
+; transitivity
 (declare trans (! s sort
                (! x (term s)
                (! y (term s)
@@ -43,13 +42,13 @@
                (! u (th_holds (= _ x y))
                (! u (th_holds (= _ y z))
                  (th_holds (= _ x z)))))))))
-
+; symmetry with negation
 (declare negsymm (! s sort
               	 (! x (term s)
               	 (! y (term s)
               	 (! u (th_holds (not (= _ x y)))
                    (th_holds (not (= _ y x))))))))
-
+; transitivity with negation 1
 (declare negtrans1 (! s sort
                    (! x (term s)
               	   (! y (term s)
@@ -57,7 +56,7 @@
                	   (! u (th_holds (not (= _ x y)))
                	   (! u (th_holds (= _ y z))
                      (th_holds (not (= _ x z))))))))))
-
+; transitivity with negation 2
 (declare negtrans2 (! s sort
                    (! x (term s)
               	   (! y (term s)
@@ -65,7 +64,7 @@
                	   (! u (th_holds (= _ x y))
                	   (! u (th_holds (not (= _ y z)))
                      (th_holds (not (= _ x z))))))))))
-
+; congruence
 (declare cong (! s1 sort
               (! s2 sort
               (! a1 (term (arrow s1 s2))
