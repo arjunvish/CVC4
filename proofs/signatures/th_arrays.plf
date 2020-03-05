@@ -9,6 +9,12 @@
 (declare Array (! s1 sort (! s2 sort sort)))	; s1 is index, s2 is element
 
 ; functions
+; The functions return a term that needs to be 
+; applied to the argument using 'apply' from 
+; th_base before it gives the output (ex, 
+; see inference rules). This was done so 
+; that the cong rule form th_base can be used 
+; on the array functions.
 
 ; args: s1, the index sort; 
 ;       s2, the element sort;
